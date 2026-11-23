@@ -22,14 +22,25 @@ export type DocumentCalculationResult = {
   igst: number;
   totalTax: number;
   additionalChargesTotal: number;
+  additionalChargeTaxDetails: {
+    id: string;
+    taxAmount: number;
+  }[];
   grandTotal: number;
 };
 
-const roundMoney = (value: number) =>
-  Math.round((value + Number.EPSILON) * 100) / 100;
+const toPaise = (value: number): number =>
+  Number.isFinite(value)
+    ? Math.round((value + Number.EPSILON) * 100)
+    : 0;
 
-const clampNonNegative = (value: number) =>
+const fromPaise = (value: number): number => value / 100;
+
+const clampNonNegative = (value: number): number =>
   Number.isFinite(value) ? Math.max(0, value) : 0;
+
+const clampTaxRate = (value: number): number =>
+  Math.min(100, clampNonNegative(value));
 
 export function calculateDocumentTotals({
   items,
@@ -37,19 +48,21 @@ export function calculateDocumentTotals({
   discount,
   additionalCharges,
 }: DocumentCalculationInput): DocumentCalculationResult {
-  // 1. Calculate subtotal before discount and tax.
-  const subtotal = roundMoney(
-    items.reduce(
-      (total, item) =>
-        total +
-        clampNonNegative(item.quantity) *
-          clampNonNegative(item.rate),
-      0
+  // 1. Calculate item amounts.
+  const itemAmounts = items.map((item) =>
+    toPaise(
+      clampNonNegative(item.quantity) *
+        clampNonNegative(item.rate)
     )
   );
 
-  // 2. Calculate document-level discount.
-  let discountAmount = 0;
+  const subtotalPaise = itemAmounts.reduce(
+    (total, amount) => total + amount,
+    0
+  );
+
+  // 2. Calculate document discount.
+  let discountPaise = 0;
 
   if (discount.type === "percentage") {
     const percentage = Math.min(
@@ -57,80 +70,133 @@ export function calculateDocumentTotals({
       clampNonNegative(discount.value)
     );
 
-    discountAmount = subtotal * (percentage / 100);
+    discountPaise = Math.round(
+      (subtotalPaise * percentage) / 100
+    );
   } else {
-    discountAmount = Math.min(
-      subtotal,
-      clampNonNegative(discount.value)
+    discountPaise = Math.min(
+      subtotalPaise,
+      toPaise(clampNonNegative(discount.value))
     );
   }
 
-  discountAmount = roundMoney(discountAmount);
+  // 3. Allocate discount proportionally across items.
+  const itemDiscounts = itemAmounts.map(() => 0);
 
-  // 3. Apply discount proportionally to each item before tax.
-  let cgst = 0;
-  let sgst = 0;
-  let igst = 0;
+  let allocatedDiscount = 0;
 
-  items.forEach((item) => {
-    const itemAmount =
-      clampNonNegative(item.quantity) *
-      clampNonNegative(item.rate);
+  const lastEligibleIndex = itemAmounts.findLastIndex(
+    (amount) => amount > 0
+  );
+
+  itemAmounts.forEach((amount, index) => {
+    if (amount === 0 || subtotalPaise === 0) return;
+
+    const remainingDiscount =
+      discountPaise - allocatedDiscount;
 
     const itemDiscount =
-      subtotal > 0
-        ? (itemAmount / subtotal) * discountAmount
-        : 0;
+      index === lastEligibleIndex
+        ? remainingDiscount
+        : Math.min(
+            remainingDiscount,
+            Math.round(
+              (discountPaise * amount) / subtotalPaise
+            )
+          );
 
-    const taxableItemAmount = Math.max(
-      0,
-      itemAmount - itemDiscount
-    );
-
-    const taxRate = clampNonNegative(item.taxRate);
-
-    const itemTax = taxableItemAmount * (taxRate / 100);
-
-    if (taxMode === "intra-state") {
-      cgst += itemTax / 2;
-      sgst += itemTax / 2;
-    } else {
-      igst += itemTax;
-    }
+    itemDiscounts[index] = itemDiscount;
+    allocatedDiscount += itemDiscount;
   });
 
-  // 4. Calculate tax totals.
-  cgst = roundMoney(cgst);
-  sgst = roundMoney(sgst);
-  igst = roundMoney(igst);
+  // 4. Calculate item GST.
+  let taxablePaise = 0;
+  let cgstPaise = 0;
+  let sgstPaise = 0;
+  let igstPaise = 0;
 
-  const totalTax = roundMoney(cgst + sgst + igst);
+  function addTax(taxableAmount: number, taxRate: number) {
+    const taxPaise = Math.round(
+      (taxableAmount * clampTaxRate(taxRate)) / 100
+    );
 
-  // 5. Calculate additional charges.
-  const additionalChargesTotal = roundMoney(
-    additionalCharges.reduce(
-      (total, charge) =>
-        total + clampNonNegative(charge.amount),
-      0
-    )
+    if (taxMode === "intra-state") {
+      const itemCgst = Math.round(taxPaise / 2);
+      const itemSgst = taxPaise - itemCgst;
+
+      cgstPaise += itemCgst;
+      sgstPaise += itemSgst;
+    } else {
+      igstPaise += taxPaise;
+    }
+  }
+
+  items.forEach((item, index) => {
+    const taxableItemPaise = Math.max(
+      0,
+      itemAmounts[index] - itemDiscounts[index]
+    );
+
+    taxablePaise += taxableItemPaise;
+
+    addTax(taxableItemPaise, item.taxRate);
+  });
+
+  // 5. Calculate additional charges and their GST.
+  let additionalChargesPaise = 0;
+
+  const additionalChargeTaxDetails = additionalCharges.map(
+    (charge) => {
+      const amountPaise = toPaise(
+        clampNonNegative(charge.amount)
+      );
+
+      additionalChargesPaise += amountPaise;
+
+      const taxRate = clampTaxRate(charge.taxRate ?? 0);
+
+      const taxPaise = Math.round(
+        (amountPaise * taxRate) / 100
+      );
+
+      if (taxMode === "intra-state") {
+        const chargeCgst = Math.round(taxPaise / 2);
+        const chargeSgst = taxPaise - chargeCgst;
+
+        cgstPaise += chargeCgst;
+        sgstPaise += chargeSgst;
+      } else {
+        igstPaise += taxPaise;
+      }
+
+      return {
+        id: charge.id,
+        taxAmount: fromPaise(taxPaise),
+      };
+    }
   );
 
-  // 6. Calculate final amount.
-  const taxableAmount = roundMoney(subtotal - discountAmount);
+  // 6. Calculate total tax and final amount.
+  const totalTaxPaise =
+    cgstPaise + sgstPaise + igstPaise;
 
-  const grandTotal = roundMoney(
-    taxableAmount + totalTax + additionalChargesTotal
-  );
+  const grandTotalPaise =
+    taxablePaise +
+    additionalChargesPaise +
+    totalTaxPaise;
 
   return {
-    subtotal,
-    discountAmount,
-    taxableAmount,
-    cgst,
-    sgst,
-    igst,
-    totalTax,
-    additionalChargesTotal,
-    grandTotal,
+    subtotal: fromPaise(subtotalPaise),
+    discountAmount: fromPaise(discountPaise),
+    taxableAmount: fromPaise(taxablePaise),
+    cgst: fromPaise(cgstPaise),
+    sgst: fromPaise(sgstPaise),
+    igst: fromPaise(igstPaise),
+    totalTax: fromPaise(totalTaxPaise),
+    additionalChargesTotal: fromPaise(
+      additionalChargesPaise
+    ),
+    additionalChargeTaxDetails,
+    grandTotal: fromPaise(grandTotalPaise),
   };
 }

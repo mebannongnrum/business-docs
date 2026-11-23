@@ -12,7 +12,9 @@ type Props = {
 };
 
 const inputClass =
-  "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15";
+  "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
+
+const labelClass = "text-xs font-medium text-muted-foreground";
 
 const paymentMethods: { value: PaymentMethod; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -28,20 +30,17 @@ export default function ReceiptPaymentForm({
   onChange,
 }: Props) {
   return (
-    <section className="space-y-5 rounded-xl border border-border bg-card p-5">
+    <section className="space-y-5 rounded-xl border border-border bg-card p-4 sm:p-5">
       <div>
         <h2 className="font-semibold">Payment details</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Record the payment received from your customer.
+          Enter the payment received from your customer.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            Amount received (₹)
-          </label>
-
+        <div className="space-y-1.5">
+          <label className={labelClass}>Amount received (₹)</label>
           <input
             type="number"
             min="0"
@@ -58,11 +57,8 @@ export default function ReceiptPaymentForm({
           />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            Payment method
-          </label>
-
+        <div className="space-y-1.5">
+          <label className={labelClass}>Payment method</label>
           <select
             className={inputClass}
             value={receipt.paymentMethod}
@@ -81,11 +77,8 @@ export default function ReceiptPaymentForm({
           </select>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            Payment date
-          </label>
-
+        <div className="space-y-1.5">
+          <label className={labelClass}>Payment date</label>
           <input
             type="date"
             className={inputClass}
@@ -96,14 +89,11 @@ export default function ReceiptPaymentForm({
           />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
+        <div className="space-y-1.5">
+          <label className={labelClass}>
             Transaction reference
-            <span className="ml-1 font-normal text-muted-foreground">
-              (Optional)
-            </span>
+            <span className="ml-1 font-normal">(Optional)</span>
           </label>
-
           <input
             className={inputClass}
             value={receipt.transactionReference}

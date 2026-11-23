@@ -2,9 +2,10 @@
 import type { DocumentType } from "../types/document.types";
 import { documentTypeConfig } from "../configs/document-types";
 
-const STORAGE_KEY = "business-docs:document-counters";
+export const DOCUMENT_COUNTERS_STORAGE_KEY =
+  "business-docs:document-counters";
 
-type DocumentCounters = Record<DocumentType, number>;
+export type DocumentCounters = Record<DocumentType, number>;
 
 const defaultCounters: DocumentCounters = {
   invoice: 1,
@@ -13,13 +14,25 @@ const defaultCounters: DocumentCounters = {
   receipt: 1,
 };
 
+function validCounter(value: unknown): number {
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 1
+  )
+    ? value
+    : 1;
+}
+
 function getCounters(): DocumentCounters {
   if (typeof window === "undefined") {
     return { ...defaultCounters };
   }
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(
+      DOCUMENT_COUNTERS_STORAGE_KEY
+    );
 
     if (!stored) {
       return { ...defaultCounters };
@@ -38,23 +51,30 @@ function getCounters(): DocumentCounters {
   }
 }
 
-function validCounter(value: unknown): number {
-  return (
-    typeof value === "number" &&
-    Number.isSafeInteger(value) &&
-    value >= 1
-  )
-    ? value
-    : 1;
-}
-
 function saveCounters(counters: DocumentCounters): void {
   if (typeof window === "undefined") return;
 
   localStorage.setItem(
-    STORAGE_KEY,
+    DOCUMENT_COUNTERS_STORAGE_KEY,
     JSON.stringify(counters)
   );
+}
+
+export function getDocumentCounters(): DocumentCounters {
+  return getCounters();
+}
+
+export function saveDocumentCounters(
+  counters: DocumentCounters
+): void {
+  const validCounters: DocumentCounters = {
+    invoice: validCounter(counters.invoice),
+    quotation: validCounter(counters.quotation),
+    estimate: validCounter(counters.estimate),
+    receipt: validCounter(counters.receipt),
+  };
+
+  saveCounters(validCounters);
 }
 
 export function getNextDocumentNumber(type: DocumentType): string {
