@@ -194,7 +194,23 @@ export default function DocumentPreview({
       ? "Acceptance terms"
       : "Terms and conditions";
 
-    const handlePrint = () => {
+  // Only show custom document fields with a label and value.
+  const visibleCustomFields = (document.customFields ?? []).filter(
+    (field) => field.label.trim() && field.value.trim()
+  );
+
+  // Only show custom item columns with a label and at least one value.
+  const visibleCustomColumns = (
+    document.itemCustomColumns ?? []
+  ).filter(
+    (column) =>
+      column.label.trim() &&
+      document.items.some(
+        (item) => item.customFields?.[column.id]?.trim()
+      )
+  );
+
+  const handlePrint = () => {
     const originalTitle = window.document.title;
 
     const filename = [
@@ -363,9 +379,7 @@ export default function DocumentPreview({
               }
             >
               <h2
-                className={`text-3xl font-bold uppercase tracking-wider ${
-                  headingFont
-                }`}
+                className={`text-3xl font-bold uppercase tracking-wider ${headingFont}`}
                 style={{ color: accentColor }}
               >
                 {config.label}
@@ -439,6 +453,25 @@ export default function DocumentPreview({
               )}
             </div>
           </section>
+
+          {/* Custom document fields */}
+          {visibleCustomFields.length > 0 && (
+            <section className={`border-b py-5 ${sectionBorder}`}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {visibleCustomFields.map((field) => (
+                  <div key={field.id}>
+                    <p className={`text-xs ${mutedText}`}>
+                      {field.label}
+                    </p>
+
+                    <p className="mt-1 wrap-break-word text-sm font-medium text-slate-900">
+                      {field.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Receipt payment details */}
           {isReceipt && (
@@ -533,6 +566,15 @@ export default function DocumentPreview({
                       Description
                     </th>
 
+                    {visibleCustomColumns.map((column) => (
+                      <th
+                        key={column.id}
+                        className="px-3 py-3 text-left font-semibold"
+                      >
+                        {column.label}
+                      </th>
+                    ))}
+
                     <th className="px-3 py-3 text-right font-semibold">
                       Qty
                     </th>
@@ -572,6 +614,15 @@ export default function DocumentPreview({
                           </p>
                         )}
                       </td>
+
+                      {visibleCustomColumns.map((column) => (
+                        <td
+                          key={column.id}
+                          className="px-3 py-4"
+                        >
+                          {item.customFields?.[column.id] || "—"}
+                        </td>
+                      ))}
 
                       <td className="px-3 py-4 text-right">
                         {item.quantity} {item.unit}
@@ -617,11 +668,63 @@ export default function DocumentPreview({
               )}
 
               <div className="flex justify-between gap-4 text-sm">
-                <span className={mutedText}>Taxable amount</span>
+                <span className={mutedText}>
+                  Item taxable amount
+                </span>
                 <span>
                   {formatCurrency(totals.taxableAmount)}
                 </span>
               </div>
+
+              {document.additionalCharges.length > 0 && (
+                <>
+                  {document.additionalCharges.map((charge) => {
+                    const taxDetails =
+                      totals.additionalChargeTaxDetails.find(
+                        (detail) => detail.id === charge.id
+                      );
+
+                    return (
+                      <div
+                        key={charge.id}
+                        className="flex justify-between gap-4 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className={mutedText}>
+                            {charge.name || "Additional charge"}
+                          </p>
+
+                          {(charge.taxRate ?? 0) > 0 && (
+                            <p className="mt-1 text-xs text-slate-400">
+                              GST {charge.taxRate}% (
+                              {formatCurrency(
+                                taxDetails?.taxAmount ?? 0
+                              )}
+                              )
+                            </p>
+                          )}
+                        </div>
+
+                        <span className="shrink-0">
+                          {formatCurrency(charge.amount)}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  <div className="flex justify-between gap-4 border-t border-dashed border-slate-200 pt-3 text-sm">
+                    <span className={mutedText}>
+                      Additional charges total
+                    </span>
+
+                    <span>
+                      {formatCurrency(
+                        totals.additionalChargesTotal
+                      )}
+                    </span>
+                  </div>
+                </>
+              )}
 
               {document.taxMode === "intra-state" ? (
                 <>
@@ -641,19 +744,6 @@ export default function DocumentPreview({
                   <span>{formatCurrency(totals.igst)}</span>
                 </div>
               )}
-
-              {document.additionalCharges.map((charge) => (
-                <div
-                  key={charge.id}
-                  className="flex justify-between gap-4 text-sm"
-                >
-                  <span className={mutedText}>
-                    {charge.name || "Additional charge"}
-                  </span>
-
-                  <span>{formatCurrency(charge.amount)}</span>
-                </div>
-              ))}
 
               <div
                 className={`flex justify-between gap-4 border-t pt-3 text-lg font-bold ${

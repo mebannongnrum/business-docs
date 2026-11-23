@@ -10,7 +10,7 @@ export default function BusinessProfilePage() {
         </h1>
 
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage your business information and document details.
+          Set up your business details, branding and payment information.
         </p>
       </div>
 

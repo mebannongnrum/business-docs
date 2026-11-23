@@ -6,9 +6,7 @@ export type DocumentType =
   | "receipt";
 
 export type DocumentStatus = "draft" | "final";
-
 export type TaxMode = "intra-state" | "inter-state";
-
 export type DiscountType = "percentage" | "fixed";
 
 export type PaymentMethod =
@@ -19,6 +17,17 @@ export type PaymentMethod =
   | "cheque"
   | "other";
 
+export type DocumentCustomField = {
+  id: string;
+  label: string;
+  value: string;
+};
+
+export type DocumentCustomColumn = {
+  id: string;
+  label: string;
+};
+
 export type DocumentItem = {
   id: string;
   name: string;
@@ -27,6 +36,7 @@ export type DocumentItem = {
   unit: string;
   rate: number;
   taxRate: number;
+  customFields: Record<string, string>;
 };
 
 export type DocumentCustomer = {
@@ -46,6 +56,7 @@ export type AdditionalCharge = {
   id: string;
   name: string;
   amount: number;
+  taxRate: number;
 };
 
 export type ReceiptDetails = {
@@ -65,6 +76,9 @@ export type BusinessDocument = {
 
   customer: DocumentCustomer;
   items: DocumentItem[];
+
+  customFields: DocumentCustomField[];
+  itemCustomColumns: DocumentCustomColumn[];
 
   taxMode: TaxMode;
   discount: DocumentDiscount;

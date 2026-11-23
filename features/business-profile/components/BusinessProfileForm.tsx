@@ -19,6 +19,28 @@ import type {
   BusinessProfile,
 } from "../types/business-profile.types";
 
+import { businessPresets } from "@/features/business-presets/configs/business-presets";
+
+import {
+  getBusinessPresetId,
+  saveBusinessPresetId,
+} from "@/features/business-presets/services/business-preset.service";
+
+import type {
+  BusinessPresetId,
+} from "@/features/business-presets/types/business-preset.types";
+
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 type FieldConfig = {
   name: keyof BusinessProfile;
   label: string;
@@ -171,14 +193,11 @@ function FormField({
 }) {
   return (
     <div className="space-y-2">
-      <label
-        htmlFor={field.name}
-        className="text-sm font-medium text-foreground"
-      >
+      <Label htmlFor={field.name}>
         {field.label}
-      </label>
+      </Label>
 
-      <input
+      <Input
         id={field.name}
         type={field.type ?? "text"}
         value={value}
@@ -186,7 +205,6 @@ function FormField({
         onChange={(event) =>
           onChange(field.name, event.target.value)
         }
-        className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20"
       />
     </div>
   );
@@ -259,6 +277,10 @@ function BusinessProfileEditor({
     initialProfile
   );
 
+  const [presetId, setPresetId] = useState<BusinessPresetId>(
+    () => getBusinessPresetId()
+  );
+
   const [isSaved, setIsSaved] = useState(false);
   const [error, setError] = useState("");
 
@@ -309,6 +331,12 @@ function BusinessProfileEditor({
     event.target.value = "";
   }
 
+  function handlePresetChange(value: string) {
+    setPresetId(value as BusinessPresetId);
+    setIsSaved(false);
+    setError("");
+  }
+
   function handleSave(
     event: React.FormEvent<HTMLFormElement>
   ) {
@@ -316,19 +344,118 @@ function BusinessProfileEditor({
 
     try {
       saveBusinessProfile(profile);
+      saveBusinessPresetId(presetId);
+
       setIsSaved(true);
       setError("");
     } catch {
       setIsSaved(false);
 
       setError(
-        "Unable to save your profile. Your browser storage may be full."
+        "Unable to save your settings. Your browser storage may be full."
       );
     }
   }
 
+  const selectedPreset = businessPresets[presetId];
+
   return (
     <form onSubmit={handleSave} className="space-y-6">
+      {/* Industry preset */}
+      <FormSection
+        title="Business type"
+        description="Choose your industry to get relevant document fields and item columns."
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="business-preset">
+              Industry
+            </Label>
+
+            <Select
+              value={presetId}
+              onValueChange={(value) => {
+                if (value) {
+                  handlePresetChange(value);
+                }
+              }}
+            >
+              <SelectTrigger
+                id="business-preset"
+                className="h-10 w-full"
+              >
+                <SelectValue placeholder="Select your industry" />
+              </SelectTrigger>
+
+              <SelectContent>
+                {Object.values(businessPresets).map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            {selectedPreset.description}
+          </p>
+
+          <div className="grid gap-4 rounded-lg border border-border bg-muted/30 p-4 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Document fields
+              </p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedPreset.documentFields.map((field) => (
+                  <span
+                    key={field.id}
+                    className="rounded-md border border-border bg-background px-2.5 py-1 text-xs"
+                  >
+                    {field.label}
+                  </span>
+                ))}
+
+                {selectedPreset.documentFields.length === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    No default fields
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Item columns
+              </p>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedPreset.itemColumns.map((column) => (
+                  <span
+                    key={column.id}
+                    className="rounded-md border border-border bg-background px-2.5 py-1 text-xs"
+                  >
+                    {column.label}
+                  </span>
+                ))}
+
+                {selectedPreset.itemColumns.length === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    No default columns
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Changing your industry selection will not delete your
+            existing business information or custom document data.
+          </p>
+        </div>
+      </FormSection>
+
       <FormSection
         title="Business information"
         description="Basic information that identifies your business on documents."
@@ -456,7 +583,7 @@ function BusinessProfileEditor({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {isSaved
-            ? "Your business profile has been saved."
+            ? "Your business profile and industry settings have been saved."
             : "Remember to save your changes."}
         </p>
 
